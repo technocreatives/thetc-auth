@@ -92,6 +92,9 @@ impl Argon2idStrategy {
 pub mod argon2id {
     #[derive(Debug, thiserror::Error)]
     pub enum Error {
+        #[error("Password too short. Minimum size: 8")]
+        PasswordTooShort,
+
         #[error("Error handling argon2id hashing.")]
         Argon2PasswordHash(#[from] argon2::password_hash::Error),
     }
@@ -101,6 +104,10 @@ impl Strategy for Argon2idStrategy {
     type Error = argon2id::Error;
 
     fn generate_password_hash(&self, input: &str) -> Result<Secret<String>, Self::Error> {
+        if input.len() < 8 {
+            return Err(Self::Error::PasswordTooShort);
+        }
+
         let argon2 = self.argon2_instance();
         let params = Params {
             m_cost: self.memory_mib * 1024,
