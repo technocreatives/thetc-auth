@@ -37,7 +37,7 @@ impl Display for SessionId {
     }
 }
 
-pub struct SessionHandler<T, S, U, E>
+pub struct SessionManager<T, S, U, E>
 where
     T: SessionBackend<Error = E, Session = S, UserId = U>,
 {
@@ -51,7 +51,7 @@ where
     backend: T,
 }
 
-impl<T, S, U, E> SessionHandler<T, S, U, E>
+impl<T, S, U, E> SessionManager<T, S, U, E>
 where
     T: SessionBackend<Error = E, Session = S, UserId = U>,
 {
@@ -105,7 +105,7 @@ pub mod postgres {
 
     use super::SessionId;
 
-    pub type SessionHandler<U> = super::SessionHandler<Backend<U>, Session<U>, U, Error>;
+    pub type SessionManager<U> = super::SessionManager<Backend<U>, Session<U>, U, Error>;
 
     pub struct Backend<U> {
         _user_ty: PhantomData<U>,
@@ -167,7 +167,7 @@ pub mod memory {
 
     use super::SessionId;
 
-    pub type SessionHandler<U> = super::SessionHandler<Backend<U>, Session<U>, U, Error>;
+    pub type SessionManager<U> = super::SessionManager<Backend<U>, Session<U>, U, Error>;
 
     #[derive(Debug, Clone)]
     pub struct Session<U: Clone> {
@@ -290,7 +290,7 @@ mod tests {
     #[test]
     fn memory() {
         let handler =
-            memory::SessionHandler::new(true, Duration::seconds(5), memory::Backend::default());
+            memory::SessionManager::new(true, Duration::seconds(5), memory::Backend::default());
         let user_id = UserId::random();
         let session = handler.new_session(user_id).unwrap();
         let _mm = handler.session(session.id).unwrap().unwrap();
@@ -299,7 +299,7 @@ mod tests {
     #[test]
     fn memory_expired_session() {
         let handler =
-            memory::SessionHandler::new(true, Duration::seconds(-1), memory::Backend::default());
+            memory::SessionManager::new(true, Duration::seconds(-1), memory::Backend::default());
         let user_id = UserId::random();
         let session = handler.new_session(user_id).unwrap();
         assert!(handler.session(session.id).unwrap().is_none())
