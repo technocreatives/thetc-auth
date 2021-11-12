@@ -4,20 +4,21 @@ use argon2::{
     password_hash::{Salt, SaltString},
     Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier,
 };
-use secrecy::{ExposeSecret, Secret};
+use secrecy::{Secret};
 
 pub trait Strategy {
-    type Error;
-
-    fn generate_password_hash(&self, input: &str) -> Result<Secret<String>, Self::Error>;
-    fn verify_password(&self, hash: &str, input: &str) -> Result<bool, Self::Error>;
+    fn generate_password_hash(&self, input: &str) -> Result<Secret<String>, Error>;
+    fn verify_password(&self, hash: &str, input: &str) -> Result<bool, Error>;
 }
 
+#[derive(Debug, Clone)]
 pub struct Argon2idStrategy {
     /// Goes with a salt. A shared salt that is mixed into all password hashing to ensure that if
     /// the database is leaked, without this extra piece, brute forcing is going to be
     /// effectively impossible.
-    pepper: Secret<Vec<u8>>,
+    /// 
+    /// TODO: fix this with Secret.
+    pepper: Vec<u8>,
 
     /// Memory to use in megabytes. Minimum is 15MB.
     memory_mib: u32,
@@ -42,6 +43,12 @@ pub enum Error {
 
     #[error("Parallelism must be at least 1.")]
     ParallelismTooWeak,
+
+    #[error("Password must be at least 8 characters.")]
+    PasswordTooShort,
+
+    #[error("A strategy function has been misused")]
+    Strategy(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl Argon2idStrategy {
@@ -68,7 +75,7 @@ impl Argon2idStrategy {
         }
 
         Ok(Self {
-            pepper: Secret::new(pepper),
+            pepper,
             memory_mib,
             iteration_count,
             parallelism_degree,
@@ -79,7 +86,7 @@ impl Argon2idStrategy {
 impl Argon2idStrategy {
     fn argon2_instance(&self) -> Argon2<'_> {
         Argon2::new(
-            Some(self.pepper.expose_secret()),
+            Some(&self.pepper),
             self.iteration_count,
             self.memory_mib * 1024,
             self.parallelism_degree,
@@ -92,20 +99,15 @@ impl Argon2idStrategy {
 pub mod argon2id {
     #[derive(Debug, thiserror::Error)]
     pub enum Error {
-        #[error("Password too short. Minimum size: 8")]
-        PasswordTooShort,
-
         #[error("Error handling argon2id hashing.")]
         Argon2PasswordHash(#[from] argon2::password_hash::Error),
     }
 }
 
 impl Strategy for Argon2idStrategy {
-    type Error = argon2id::Error;
-
-    fn generate_password_hash(&self, input: &str) -> Result<Secret<String>, Self::Error> {
+    fn generate_password_hash(&self, input: &str) -> Result<Secret<String>, Error> {
         if input.len() < 8 {
-            return Err(Self::Error::PasswordTooShort);
+            return Err(Error::PasswordTooShort);
         }
 
         let argon2 = self.argon2_instance();
@@ -125,21 +127,22 @@ impl Strategy for Argon2idStrategy {
                 None,
                 params,
                 Salt::try_from(salt.as_ref()).unwrap(),
-            )?
+            )
+            .map_err(|e| Error::Strategy(Box::new(e)))?
             .to_string();
 
         Ok(Secret::new(result))
     }
 
-    fn verify_password(&self, hash: &str, input: &str) -> Result<bool, Self::Error> {
+    fn verify_password(&self, hash: &str, input: &str) -> Result<bool, Error> {
         let argon2 = self.argon2_instance();
 
-        let hash = PasswordHash::new(hash)?;
+        let hash = PasswordHash::new(hash).map_err(|e| Error::Strategy(Box::new(e)))?;
         match argon2.verify_password(input.as_bytes(), &hash) {
             Ok(_) => Ok(true),
             Err(e) => match e {
                 argon2::password_hash::Error::Password => Ok(false),
-                _ => Err(e.into()),
+                _ => Err(Error::Strategy(Box::new(e))),
             },
         }
     }
