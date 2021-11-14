@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{collections::HashMap, sync::RwLock};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -16,13 +16,13 @@ pub struct Session<U: Clone> {
 
 #[derive(Debug)]
 pub struct Backend<U: Clone> {
-    sessions: RefCell<HashMap<SessionId, Session<U>>>,
+    sessions: RwLock<HashMap<SessionId, Session<U>>>,
 }
 
 impl<U: Clone> Default for Backend<U> {
     fn default() -> Self {
         Self {
-            sessions: RefCell::new(HashMap::new()),
+            sessions: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -33,8 +33,8 @@ pub enum Error {
     NotFound(SessionId),
 }
 
-#[async_trait(?Send)]
-impl<U: Clone> super::SessionBackend for Backend<U> {
+#[async_trait]
+impl<U: Clone + Send + Sync> super::SessionBackend for Backend<U> {
     type Error = Error;
     type Session = Session<U>;
     type UserId = U;
@@ -44,7 +44,7 @@ impl<U: Clone> super::SessionBackend for Backend<U> {
         user_id: Self::UserId,
         expires_at: DateTime<Utc>,
     ) -> Result<Self::Session, Self::Error> {
-        let mut guard = self.sessions.borrow_mut();
+        let mut guard = self.sessions.write().unwrap();
         let id = SessionId::new();
         let session = Session {
             id,
@@ -60,7 +60,7 @@ impl<U: Clone> super::SessionBackend for Backend<U> {
         id: SessionId,
         extend_expiry: Option<DateTime<Utc>>,
     ) -> Result<Self::Session, Self::Error> {
-        let mut guard = self.sessions.borrow_mut();
+        let mut guard = self.sessions.write().unwrap();
         Ok(match guard.get(&id).cloned() {
             Some(v) => {
                 if Utc::now() < v.expires_at {
@@ -77,7 +77,7 @@ impl<U: Clone> super::SessionBackend for Backend<U> {
 
     async fn clear_stale_sessions(&self) -> Result<(), Self::Error> {
         let keys = {
-            let guard = self.sessions.borrow();
+            let guard = self.sessions.read().unwrap();
             guard
                 .iter()
                 .filter(|(k, v)| Utc::now() >= v.expires_at)
@@ -86,7 +86,7 @@ impl<U: Clone> super::SessionBackend for Backend<U> {
                 .collect::<Vec<_>>()
         };
 
-        let mut guard = self.sessions.borrow_mut();
+        let mut guard = self.sessions.write().unwrap();
         for key in keys {
             guard.remove(&key);
         }
@@ -95,7 +95,7 @@ impl<U: Clone> super::SessionBackend for Backend<U> {
     }
 
     async fn expire(&self, session: Self::Session) -> Result<(), Self::Error> {
-        let mut guard = self.sessions.borrow_mut();
+        let mut guard = self.sessions.write().unwrap();
         guard.remove(&session.id);
         Ok(())
     }
@@ -105,7 +105,7 @@ impl<U: Clone> super::SessionBackend for Backend<U> {
         session: Self::Session,
         expires_at: DateTime<Utc>,
     ) -> Result<Self::Session, Self::Error> {
-        let mut guard = self.sessions.borrow_mut();
+        let mut guard = self.sessions.write().unwrap();
         let session = guard
             .get_mut(&session.id)
             .ok_or_else(|| Error::NotFound(session.id))?;

@@ -59,8 +59,8 @@ pub enum Error {
     NotFound(SessionId),
 }
 
-#[async_trait(?Send)]
-impl<U: Clone + Serialize + DeserializeOwned> super::SessionBackend for Backend<U> {
+#[async_trait]
+impl<U: Clone + Serialize + DeserializeOwned + Send + Sync> super::SessionBackend for Backend<U> {
     type Error = Error;
     type Session = Session<U>;
     type UserId = U;

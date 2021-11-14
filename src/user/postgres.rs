@@ -38,7 +38,7 @@ impl<S: Strategy, U: UsernameType> Backend<S, U> {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 impl<S: Strategy, U: UsernameType> UserBackend<S, U> for Backend<S, U> {
     type Error = Error;
 

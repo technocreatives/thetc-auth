@@ -12,7 +12,9 @@ impl<T: UsernameType + Debug> Debug for Username<T> {
     }
 }
 
-pub trait UsernameType: Deref<Target = str> + FromStr<Err = Self::TryIntoError> {
+pub trait UsernameType:
+    Deref<Target = str> + FromStr<Err = Self::TryIntoError> + Sync + Send
+{
     type TryIntoError: std::error::Error + Send + Sync + 'static;
 
     fn into_inner(self) -> String;

@@ -7,8 +7,8 @@ pub mod memory;
 pub mod postgres;
 pub mod redis;
 
-#[async_trait(?Send)]
-pub trait SessionBackend {
+#[async_trait]
+pub trait SessionBackend: Send + Sync {
     type Error;
     type Session;
     type UserId;

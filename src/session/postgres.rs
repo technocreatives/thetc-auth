@@ -13,8 +13,8 @@ pub struct Backend<U> {
 
 pub enum Error {}
 
-#[async_trait(?Send)]
-impl<U: sqlx::Type<sqlx::Postgres>> super::SessionBackend for Backend<U> {
+#[async_trait]
+impl<U: sqlx::Type<sqlx::Postgres> + Send + Sync> super::SessionBackend for Backend<U> {
     type Error = Error;
     type UserId = U;
     type Session = Session<Self::UserId>;

@@ -6,7 +6,7 @@ use argon2::{
 };
 use secrecy::Secret;
 
-pub trait Strategy {
+pub trait Strategy: Send + Sync {
     fn generate_password_hash(&self, input: &str) -> Result<Secret<String>, Error>;
     fn verify_password(&self, hash: &str, input: &str) -> Result<bool, Error>;
 }

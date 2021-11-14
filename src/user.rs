@@ -67,7 +67,7 @@ impl<U: UsernameType> User<U> {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait UserBackend<S: Strategy, U: UsernameType> {
     type Error;
 
