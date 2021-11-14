@@ -1,6 +1,10 @@
 use secrecy::ExposeSecret;
 use sqlx::PgPool;
-use thetc_auth::{password_strategy::{Argon2idStrategy, Strategy}, user::{NewUser, UserBackend}, username::ascii::AsciiUsername};
+use thetc_auth::{
+    password_strategy::{Argon2idStrategy, Strategy},
+    user::{NewUser, UserBackend},
+    username::ascii::AsciiUsername,
+};
 
 #[tokio::main]
 async fn main() {
@@ -19,5 +23,10 @@ async fn main() {
     let user = users.find_user_by_username(&username).await.unwrap();
     println!("{:#?}", user);
 
-    println!("{}", strategy.verify_password(user.password_hash.expose_secret(), "password").unwrap());
+    println!(
+        "{}",
+        strategy
+            .verify_password(user.password_hash.expose_secret(), "password")
+            .unwrap()
+    );
 }

@@ -4,7 +4,7 @@ use argon2::{
     password_hash::{Salt, SaltString},
     Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier,
 };
-use secrecy::{Secret};
+use secrecy::Secret;
 
 pub trait Strategy {
     fn generate_password_hash(&self, input: &str) -> Result<Secret<String>, Error>;
@@ -16,7 +16,7 @@ pub struct Argon2idStrategy {
     /// Goes with a salt. A shared salt that is mixed into all password hashing to ensure that if
     /// the database is leaked, without this extra piece, brute forcing is going to be
     /// effectively impossible.
-    /// 
+    ///
     /// TODO: fix this with Secret.
     pepper: Vec<u8>,
 

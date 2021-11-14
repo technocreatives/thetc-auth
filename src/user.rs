@@ -18,6 +18,7 @@ pub struct NewUser<U: UsernameType> {
     pub username: Username<U>,
     pub password: Secret<String>,
     pub meta: serde_json::Value,
+    pub id: Option<UserId>,
 }
 
 impl<U: UsernameType> NewUser<U> {
@@ -26,6 +27,16 @@ impl<U: UsernameType> NewUser<U> {
             username: username.parse()?,
             password: Secret::new(password.to_string()),
             meta: Default::default(),
+            id: None,
+        })
+    }
+
+    pub fn with_id(id: UserId, username: &str, password: &str) -> Result<Self, U::Err> {
+        Ok(Self {
+            username: username.parse()?,
+            password: Secret::new(password.to_string()),
+            meta: Default::default(),
+            id: Some(id),
         })
     }
 }

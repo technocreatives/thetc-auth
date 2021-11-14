@@ -43,16 +43,33 @@ impl<S: Strategy, U: UsernameType> UserBackend<S, U> for Backend<S, U> {
         let password_hash = self
             .strategy
             .generate_password_hash(user.password.expose_secret())?;
-        let mut conn = self.pool.acquire().await?;
-        let user_id = database::insert_user(
-            &mut conn,
-            user.username,
-            password_hash,
-            user.meta,
-            self.table_name,
-        )
-        .await?;
-        Ok(database::find_user_by_id(&mut conn, user_id, self.table_name).await?)
+        let mut conn = self.pool.begin().await?;
+        let user_id = match user.id {
+            Some(id) => {
+                database::insert_user_with_id(
+                    &mut conn,
+                    id,
+                    user.username,
+                    password_hash,
+                    user.meta,
+                    self.table_name,
+                )
+                .await?
+            }
+            None => {
+                database::insert_user(
+                    &mut conn,
+                    user.username,
+                    password_hash,
+                    user.meta,
+                    self.table_name,
+                )
+                .await?
+            }
+        };
+        let user = database::find_user_by_id(&mut conn, user_id, self.table_name).await?;
+        conn.commit().await?;
+        Ok(user)
     }
 
     async fn find_user_by_id(&self, id: UserId) -> Result<User<U>, Self::Error> {
@@ -76,6 +93,31 @@ mod database {
     use crate::username::{Username, UsernameType};
 
     use super::{User, UserId};
+
+    pub async fn insert_user_with_id<U: UsernameType>(
+        conn: &mut PgConnection,
+        id: UserId,
+        username: Username<U>,
+        password_hash: Secret<String>,
+        meta: serde_json::Value,
+        table_name: &'static str,
+    ) -> Result<UserId, sqlx::Error> {
+        let rec = sqlx::query(&format!(
+            r#"
+                INSERT INTO {}(id, username, password_hash, meta) VALUES ($1, $2::text, $3, $4)
+                RETURNING id;
+            "#,
+            table_name
+        ))
+        .bind(*id)
+        .bind(&*username)
+        .bind(password_hash.expose_secret())
+        .bind(meta)
+        .fetch_one(conn)
+        .await?;
+
+        Ok(UserId(rec.get(0)))
+    }
 
     pub async fn insert_user<U: UsernameType>(
         conn: &mut PgConnection,
