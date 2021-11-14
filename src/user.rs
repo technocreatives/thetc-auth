@@ -49,6 +49,24 @@ pub struct User<U: UsernameType> {
     pub meta: serde_json::Value,
 }
 
+impl<U: UsernameType> User<U> {
+    pub fn new(
+        id: UserId,
+        username: &str,
+        password_hash: String,
+        meta: Option<serde_json::Value>,
+    ) -> Result<Self, U::TryIntoError> {
+        let username: Username<U> = username.parse()?;
+
+        Ok(Self {
+            id,
+            username,
+            password_hash: Secret::new(password_hash),
+            meta: meta.unwrap_or(serde_json::Value::Null),
+        })
+    }
+}
+
 #[async_trait(?Send)]
 pub trait UserBackend<S: Strategy, U: UsernameType> {
     type Error;
