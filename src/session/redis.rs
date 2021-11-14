@@ -9,7 +9,7 @@ use super::SessionId;
 
 pub type SessionManager<U> = super::SessionManager<Backend<U>, Session<U>, U, Error>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session<U: Clone> {
     pub id: SessionId,
     pub data: SessionData<U>,
@@ -34,6 +34,13 @@ impl<U: Clone> Backend<U> {
             pool,
             _user_id: PhantomData,
         })
+    }
+
+    pub fn with_pool(pool: deadpool_redis::Pool) -> Self {
+        Self {
+            pool,
+            _user_id: PhantomData,
+        }
     }
 }
 
