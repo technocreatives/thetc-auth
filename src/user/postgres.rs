@@ -15,6 +15,9 @@ pub enum Error {
 
     #[error("password error")]
     Password(#[from] crate::password_strategy::Error),
+
+    #[error("The entered password was invalid.")]
+    InvalidPassword,
 }
 
 pub struct Backend<S: Strategy, U: UsernameType> {
@@ -83,6 +86,16 @@ impl<S: Strategy, U: UsernameType> UserBackend<S, U> for Backend<S, U> {
             database::find_user_by_username(&mut conn, username.to_string(), self.table_name)
                 .await?,
         )
+    }
+
+    fn verify_password(&self, user: &User<U>, password: &str) -> Result<(), Self::Error> {
+        match self
+            .strategy
+            .verify_password(user.password_hash.expose_secret(), password)?
+        {
+            true => Ok(()),
+            false => Err(Error::InvalidPassword),
+        }
     }
 }
 
