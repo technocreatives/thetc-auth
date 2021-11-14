@@ -8,7 +8,7 @@ edition = "2018"
 argon2 = { version = "0.2.3", features = ["std"] }
 async-trait = "0.1.51"
 chrono = "0.4.19"
-nova = "0.3.1"
+nova = "0.4.0"
 rand = "0.8.4"
 rand_core = { version = "0.6.3", features = ["std"] }
 secrecy = "0.8.0"

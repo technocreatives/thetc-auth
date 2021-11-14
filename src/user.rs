@@ -8,7 +8,7 @@ use crate::{
     username::{Username, UsernameType},
 };
 
-#[nova::newtype(serde, sqlx, copy)]
+#[nova::newtype(serde, sqlx, copy, new)]
 pub type UserId = uuid::Uuid;
 
 pub type PgUsers<S, U> = postgres::Backend<S, U>;
