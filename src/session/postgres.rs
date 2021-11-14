@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use super::SessionId;
@@ -12,12 +13,13 @@ pub struct Backend<U> {
 
 pub enum Error {}
 
+#[async_trait(?Send)]
 impl<U: sqlx::Type<sqlx::Postgres>> super::SessionBackend for Backend<U> {
     type Error = Error;
     type UserId = U;
     type Session = Session<Self::UserId>;
 
-    fn new_session(
+    async fn new_session(
         &self,
         id: Self::UserId,
         expires_at: DateTime<Utc>,
@@ -25,15 +27,15 @@ impl<U: sqlx::Type<sqlx::Postgres>> super::SessionBackend for Backend<U> {
         todo!()
     }
 
-    fn clear_stale_sessions(&self) -> Result<(), Self::Error> {
+    async fn clear_stale_sessions(&self) -> Result<(), Self::Error> {
         todo!()
     }
 
-    fn expire(&self, session: Self::Session) -> Result<(), Self::Error> {
+    async fn expire(&self, session: Self::Session) -> Result<(), Self::Error> {
         todo!()
     }
 
-    fn extend_expiry_date(
+    async fn extend_expiry_date(
         &self,
         session: Self::Session,
         expires_at: DateTime<Utc>,
@@ -41,7 +43,11 @@ impl<U: sqlx::Type<sqlx::Postgres>> super::SessionBackend for Backend<U> {
         todo!()
     }
 
-    fn session(&self, id: SessionId) -> Result<Option<Self::Session>, Self::Error> {
+    async fn session(
+        &self,
+        id: SessionId,
+        extend_expiry: Option<DateTime<Utc>>,
+    ) -> Result<Self::Session, Self::Error> {
         todo!()
     }
 }

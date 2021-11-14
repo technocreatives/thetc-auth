@@ -1,24 +1,31 @@
 use std::fmt::Display;
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 pub mod memory;
 pub mod postgres;
+pub mod redis;
 
+#[async_trait(?Send)]
 pub trait SessionBackend {
     type Error;
     type Session;
     type UserId;
 
-    fn new_session(
+    async fn new_session(
         &self,
         id: Self::UserId,
         expires_at: DateTime<Utc>,
     ) -> Result<Self::Session, Self::Error>;
-    fn session(&self, id: SessionId) -> Result<Option<Self::Session>, Self::Error>;
-    fn clear_stale_sessions(&self) -> Result<(), Self::Error>;
-    fn expire(&self, session: Self::Session) -> Result<(), Self::Error>;
-    fn extend_expiry_date(
+    async fn session(
+        &self,
+        id: SessionId,
+        extend_expiry: Option<DateTime<Utc>>,
+    ) -> Result<Self::Session, Self::Error>;
+    async fn clear_stale_sessions(&self) -> Result<(), Self::Error>;
+    async fn expire(&self, session: Self::Session) -> Result<(), Self::Error>;
+    async fn extend_expiry_date(
         &self,
         session: Self::Session,
         expires_at: DateTime<Utc>,
@@ -67,37 +74,35 @@ where
     }
 
     #[inline]
-    pub fn extend_expiry_date(&self, session: S) -> Result<S, E> {
+    pub async fn extend_expiry_date(&self, session: S) -> Result<S, E> {
         let expires_at = Utc::now() + self.alive_duration;
-        self.backend.extend_expiry_date(session, expires_at)
+        self.backend.extend_expiry_date(session, expires_at).await
     }
 
     #[inline]
-    pub fn new_session(&self, user_id: U) -> Result<S, E> {
+    pub async fn new_session(&self, user_id: U) -> Result<S, E> {
         let expires_at = Utc::now() + self.alive_duration;
-        self.backend.new_session(user_id, expires_at)
+        self.backend.new_session(user_id, expires_at).await
     }
 
     #[inline]
-    pub fn session(&self, session_id: SessionId) -> Result<Option<S>, E> {
-        let session = self.backend.session(session_id);
-        if self.auto_refresh {
-            if let Ok(Some(session)) = session {
-                let expires_at = Utc::now() + self.alive_duration;
-                return Ok(Some(self.backend.extend_expiry_date(session, expires_at)?));
-            }
-        }
-        session
+    pub async fn session(&self, session_id: SessionId) -> Result<S, E> {
+        let extend_expiry = match self.auto_refresh {
+            true => Some(Utc::now() + self.alive_duration),
+            false => None,
+        };
+
+        self.backend.session(session_id, extend_expiry).await
     }
 
     #[inline]
-    fn clear_stale_sessions(&self) -> Result<(), E> {
-        self.backend.clear_stale_sessions()
+    pub async fn clear_stale_sessions(&self) -> Result<(), E> {
+        self.backend.clear_stale_sessions().await
     }
 
     #[inline]
-    fn expire(&self, session: S) -> Result<(), E> {
-        self.backend.expire(session)
+    pub async fn expire(&self, session: S) -> Result<(), E> {
+        self.backend.expire(session).await
     }
 }
 
@@ -118,19 +123,29 @@ mod tests {
 
     #[test]
     fn memory() {
-        let handler =
-            memory::SessionManager::new(true, Duration::seconds(5), memory::Backend::default());
-        let user_id = UserId::random();
-        let session = handler.new_session(user_id).unwrap();
-        let _mm = handler.session(session.id).unwrap().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async move {
+            let handler =
+                memory::SessionManager::new(true, Duration::seconds(5), memory::Backend::default());
+            let user_id = UserId::random();
+            let session = handler.new_session(user_id).await.unwrap();
+            let _mm = handler.session(session.id).await.unwrap();
+        })
     }
 
     #[test]
     fn memory_expired_session() {
-        let handler =
-            memory::SessionManager::new(true, Duration::seconds(-1), memory::Backend::default());
-        let user_id = UserId::random();
-        let session = handler.new_session(user_id).unwrap();
-        assert!(handler.session(session.id).unwrap().is_none())
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            let handler = memory::SessionManager::new(
+                true,
+                Duration::seconds(-1),
+                memory::Backend::default(),
+            );
+            let user_id = UserId::random();
+            let session = handler.new_session(user_id).await.unwrap();
+            assert!(handler.session(session.id).await.is_err())
+        });
     }
 }

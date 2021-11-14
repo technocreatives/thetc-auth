@@ -1,5 +1,6 @@
 use std::{cell::RefCell, collections::HashMap};
 
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
 use super::SessionId;
@@ -32,12 +33,13 @@ pub enum Error {
     NotFound(SessionId),
 }
 
+#[async_trait(?Send)]
 impl<U: Clone> super::SessionBackend for Backend<U> {
     type Error = Error;
     type Session = Session<U>;
     type UserId = U;
 
-    fn new_session(
+    async fn new_session(
         &self,
         user_id: Self::UserId,
         expires_at: DateTime<Utc>,
@@ -53,23 +55,27 @@ impl<U: Clone> super::SessionBackend for Backend<U> {
         Ok(session)
     }
 
-    fn session(&self, id: SessionId) -> Result<Option<Self::Session>, Self::Error> {
+    async fn session(
+        &self,
+        id: SessionId,
+        extend_expiry: Option<DateTime<Utc>>,
+    ) -> Result<Self::Session, Self::Error> {
         let mut guard = self.sessions.borrow_mut();
         Ok(match guard.get(&id).cloned() {
             Some(v) => {
                 if Utc::now() < v.expires_at {
-                    Some(v)
+                    v
                 } else {
                     // Remove because expired.
                     guard.remove(&id);
-                    None
+                    return Err(Error::NotFound(id));
                 }
             }
-            None => None,
+            None => return Err(Error::NotFound(id)),
         })
     }
 
-    fn clear_stale_sessions(&self) -> Result<(), Self::Error> {
+    async fn clear_stale_sessions(&self) -> Result<(), Self::Error> {
         let keys = {
             let guard = self.sessions.borrow();
             guard
@@ -88,13 +94,13 @@ impl<U: Clone> super::SessionBackend for Backend<U> {
         Ok(())
     }
 
-    fn expire(&self, session: Self::Session) -> Result<(), Self::Error> {
+    async fn expire(&self, session: Self::Session) -> Result<(), Self::Error> {
         let mut guard = self.sessions.borrow_mut();
         guard.remove(&session.id);
         Ok(())
     }
 
-    fn extend_expiry_date(
+    async fn extend_expiry_date(
         &self,
         session: Self::Session,
         expires_at: DateTime<Utc>,
