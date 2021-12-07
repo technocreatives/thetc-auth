@@ -85,12 +85,11 @@ impl Argon2idStrategy {
 
 impl Argon2idStrategy {
     fn argon2_instance(&self) -> Argon2<'_> {
-        Argon2::new(
-            Some(&self.pepper),
-            self.iteration_count,
-            self.memory_mib * 1024,
-            self.parallelism_degree,
+        Argon2::new_with_secret(
+            &self.pepper,
             Default::default(),
+            Default::default(),
+            Params::new(self.memory_mib * 1024, self.iteration_count, self.parallelism_degree, None).unwrap()
         )
         .unwrap()
     }
@@ -111,22 +110,12 @@ impl Strategy for Argon2idStrategy {
         }
 
         let argon2 = self.argon2_instance();
-        let params = Params {
-            m_cost: self.memory_mib * 1024,
-            t_cost: self.iteration_count,
-            p_cost: self.parallelism_degree,
-            output_size: Params::DEFAULT_OUTPUT_SIZE,
-            version: Default::default(),
-        };
-
         let salt = SaltString::generate(&mut rand::thread_rng());
 
         let result = argon2
             .hash_password(
                 input.as_bytes(),
-                None,
-                params,
-                Salt::try_from(salt.as_ref()).unwrap(),
+                &Salt::try_from(salt.as_ref()).unwrap(),
             )
             .map_err(|e| Error::Strategy(Box::new(e)))?
             .to_string();
