@@ -13,6 +13,9 @@ pub enum Error {
     #[error("sqlx error")]
     Sqlx(#[from] sqlx::Error),
 
+    #[error("invalid username")]
+    Username(#[source] Box<dyn std::error::Error + Sync + Send>),
+
     #[error("password error")]
     Password(#[from] crate::password_strategy::Error),
 
