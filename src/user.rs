@@ -69,7 +69,7 @@ impl<U: UsernameType> User<U> {
 
 #[async_trait]
 pub trait UserBackend<S: Strategy, U: UsernameType> {
-    type Error;
+    type Error: std::error::Error;
 
     async fn create_user(&self, user: NewUser<U>) -> Result<User<U>, Self::Error>;
     async fn find_user_by_id(&self, id: UserId) -> Result<User<U>, Self::Error>;

@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, convert::TryFrom};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -44,6 +44,23 @@ impl SessionId {
 impl Display for SessionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&**self, f)
+    }
+}
+
+impl TryFrom<&str> for SessionId {
+    type Error = uuid::Error;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let uuid = uuid::Uuid::parse_str(value)?;
+        Ok(Self(uuid))
+    }
+}
+
+impl TryFrom<String> for SessionId {
+    type Error = uuid::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        <SessionId as TryFrom<&str>>::try_from(&value)
     }
 }
 
