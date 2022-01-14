@@ -9,7 +9,7 @@ pub mod redis;
 
 #[async_trait]
 pub trait SessionBackend: Send + Sync {
-    type Error;
+    type Error: std::error::Error;
     type Session;
     type UserId;
 
