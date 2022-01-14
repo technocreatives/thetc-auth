@@ -89,7 +89,13 @@ impl Argon2idStrategy {
             &self.pepper,
             Default::default(),
             Default::default(),
-            Params::new(self.memory_mib * 1024, self.iteration_count, self.parallelism_degree, None).unwrap()
+            Params::new(
+                self.memory_mib * 1024,
+                self.iteration_count,
+                self.parallelism_degree,
+                None,
+            )
+            .unwrap(),
         )
         .unwrap()
     }
@@ -113,10 +119,7 @@ impl Strategy for Argon2idStrategy {
         let salt = SaltString::generate(&mut rand::thread_rng());
 
         let result = argon2
-            .hash_password(
-                input.as_bytes(),
-                &Salt::try_from(salt.as_ref()).unwrap(),
-            )
+            .hash_password(input.as_bytes(), &Salt::try_from(salt.as_ref()).unwrap())
             .map_err(|e| Error::Strategy(Box::new(e)))?
             .to_string();
 

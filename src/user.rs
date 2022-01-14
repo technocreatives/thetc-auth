@@ -76,3 +76,14 @@ pub trait UserBackend<S: Strategy, U: UsernameType> {
     async fn find_user_by_username(&self, name: &str) -> Result<User<U>, Self::Error>;
     fn verify_password(&self, user: &User<U>, password: &str) -> Result<(), Self::Error>;
 }
+
+#[async_trait]
+pub trait UserBackendTransactional<'a, S: Strategy, U: UsernameType>: UserBackend<S, U> {
+    type Tx: 'a;
+
+    async fn create_user_transaction(
+        &'a self,
+        tx: &mut Self::Tx,
+        user: NewUser<U>,
+    ) -> Result<User<U>, Self::Error>;
+}

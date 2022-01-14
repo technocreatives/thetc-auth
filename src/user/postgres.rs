@@ -2,11 +2,11 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use secrecy::ExposeSecret;
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::{password_strategy::Strategy, username::UsernameType};
 
-use super::{NewUser, User, UserBackend, UserId};
+use super::{NewUser, User, UserBackend, UserBackendTransactional, UserId};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -41,39 +41,61 @@ impl<S: Strategy, U: UsernameType> Backend<S, U> {
     }
 }
 
+#[inline]
+async fn create_user<'a, S: Strategy, U: UsernameType>(
+    mut conn: &mut Transaction<'a, Postgres>,
+    strategy: &'a S,
+    table_name: &'static str,
+    user: NewUser<U>,
+) -> Result<User<U>, Error> {
+    let password_hash = strategy.generate_password_hash(user.password.expose_secret())?;
+    let user_id = match user.id {
+        Some(id) => {
+            database::insert_user_with_id(
+                &mut conn,
+                id,
+                user.username,
+                password_hash,
+                user.meta,
+                table_name,
+            )
+            .await?
+        }
+        None => {
+            database::insert_user(
+                &mut conn,
+                user.username,
+                password_hash,
+                user.meta,
+                table_name,
+            )
+            .await?
+        }
+    };
+    let user = database::find_user_by_id(&mut conn, user_id, table_name).await?;
+    Ok(user)
+}
+
+#[async_trait]
+impl<'a, S: Strategy, U: UsernameType> UserBackendTransactional<'a, S, U> for Backend<S, U> {
+    type Tx = Transaction<'a, Postgres>;
+
+    async fn create_user_transaction(
+        &'a self,
+        tx: &mut Self::Tx,
+        user: NewUser<U>,
+    ) -> Result<User<U>, Self::Error> {
+        create_user(tx, &self.strategy, self.table_name, user).await
+    }
+}
+
 #[async_trait]
 impl<S: Strategy, U: UsernameType> UserBackend<S, U> for Backend<S, U> {
     type Error = Error;
 
     async fn create_user(&self, user: NewUser<U>) -> Result<User<U>, Self::Error> {
-        let password_hash = self
-            .strategy
-            .generate_password_hash(user.password.expose_secret())?;
         let mut conn = self.pool.begin().await?;
-        let user_id = match user.id {
-            Some(id) => {
-                database::insert_user_with_id(
-                    &mut conn,
-                    id,
-                    user.username,
-                    password_hash,
-                    user.meta,
-                    self.table_name,
-                )
-                .await?
-            }
-            None => {
-                database::insert_user(
-                    &mut conn,
-                    user.username,
-                    password_hash,
-                    user.meta,
-                    self.table_name,
-                )
-                .await?
-            }
-        };
-        let user = database::find_user_by_id(&mut conn, user_id, self.table_name).await?;
+        let user = create_user(&mut conn, &self.strategy, self.table_name, user).await?;
         conn.commit().await?;
         Ok(user)
     }

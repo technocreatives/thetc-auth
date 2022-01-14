@@ -1,4 +1,4 @@
-use std::{fmt::Display, convert::TryFrom};
+use std::{convert::TryFrom, fmt::Display};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
