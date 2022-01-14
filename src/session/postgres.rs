@@ -11,6 +11,7 @@ pub struct Backend<U> {
     _user_ty: PhantomData<U>,
 }
 
+#[derive(Debug, thiserror::Error)]
 pub enum Error {}
 
 #[async_trait]
