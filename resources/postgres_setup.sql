@@ -13,3 +13,14 @@ CREATE TABLE sessions (
     data JSONB NOT NULL DEFAULT '{}',
     expires_at TIMESTAMPTZ NOT NULL
 );
+
+CREATE TABLE appauth (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT UNIQUE NOT NULL,
+    description TEXT,
+    token TEXT UNIQUE NOT NULL,
+    meta JSONB NOT NULL DEFAULT '{}',
+    expires_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_appauth__token ON appauth (token);

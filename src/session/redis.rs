@@ -60,7 +60,10 @@ pub enum Error {
 }
 
 #[async_trait]
-impl<U: Clone + Serialize + DeserializeOwned + Send + Sync> super::SessionBackend for Backend<U> {
+impl<U> super::SessionBackend for Backend<U>
+where
+    U: Clone + Serialize + DeserializeOwned + Send + Sync,
+{
     type Error = Error;
     type Session = Session<U>;
     type UserId = U;
