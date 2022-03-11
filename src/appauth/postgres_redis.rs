@@ -4,10 +4,16 @@ use redis::RedisError;
 use secrecy::ExposeSecret;
 use sqlx::PgPool;
 
+use crate::util;
+
 use super::{AppAuth, AppAuthId, NewAppAuth};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[cfg(feature = "deadpool")]
+    #[error("sqlx error")]
+    SqlxPool(#[from] deadpool::managed::PoolError<sqlx::Error>),
+
     #[error("sqlx error")]
     Sqlx(#[from] sqlx::Error),
 
@@ -43,6 +49,28 @@ impl Backend {
     }
 }
 
+#[cfg(feature = "deadpool")]
+pub struct DeadpoolBackend {
+    pg_pool: util::deadpool::PgPool,
+    redis_pool: deadpool_redis::Pool,
+    table_name: &'static str,
+}
+
+#[cfg(feature = "deadpool")]
+impl DeadpoolBackend {
+    pub fn new(
+        pg_pool: util::deadpool::PgPool,
+        redis_pool: deadpool_redis::Pool,
+        table_name: &'static str,
+    ) -> Self {
+        Self {
+            pg_pool,
+            redis_pool,
+            table_name,
+        }
+    }
+}
+
 async fn set_redis_token(
     redis_pool: &deadpool_redis::Pool,
     appauth: &AppAuth,
@@ -64,6 +92,45 @@ async fn set_redis_token(
 
 #[async_trait]
 impl super::AppAuthBackend for Backend {
+    type Error = Error;
+
+    async fn create_appauth(&self, app_auth: NewAppAuth) -> Result<AppAuth, Self::Error> {
+        let mut conn = self.pg_pool.acquire().await?;
+        let id = database::insert_app_auth(&mut conn, app_auth, self.table_name).await?;
+        let appauth = database::find_appauth_by_id(&mut conn, id, self.table_name).await?;
+        set_redis_token(&self.redis_pool, &appauth).await?;
+
+        Ok(appauth)
+    }
+
+    async fn verify_token(&self, id: AppAuthId, token: &str) -> Result<(), Self::Error> {
+        let mut conn = self.redis_pool.get().await?;
+
+        let redis_token: Option<String> = redis::cmd("GET")
+            .arg(format!("appauth/{}", *id))
+            .query_async(&mut conn)
+            .await?;
+
+        if let Some(redis_token) = redis_token {
+            if redis_token == token {
+                return Ok(());
+            }
+        }
+
+        let mut conn = self.pg_pool.acquire().await?;
+        let record = database::find_appauth_by_id(&mut conn, id, self.table_name).await?;
+        let real_token = record.token.expose_secret();
+        if token != real_token {
+            set_redis_token(&self.redis_pool, &record).await?;
+            return Err(Error::InvalidToken);
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "deadpool")]
+#[async_trait]
+impl super::AppAuthBackend for DeadpoolBackend {
     type Error = Error;
 
     async fn create_appauth(&self, app_auth: NewAppAuth) -> Result<AppAuth, Self::Error> {

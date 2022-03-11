@@ -2,14 +2,18 @@ use std::marker::PhantomData;
 
 use async_trait::async_trait;
 use secrecy::ExposeSecret;
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{Acquire, PgPool, Postgres, Transaction};
 
-use crate::{password_strategy::Strategy, username::UsernameType};
+use crate::{password_strategy::Strategy, username::UsernameType, util};
 
 use super::{NewUser, User, UserBackend, UserBackendTransactional, UserId};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[cfg(feature = "deadpool")]
+    #[error("sqlx error")]
+    SqlxPool(#[from] deadpool::managed::PoolError<sqlx::Error>),
+
     #[error("sqlx error")]
     Sqlx(#[from] sqlx::Error),
 
@@ -32,6 +36,26 @@ pub struct Backend<S: Strategy, U: UsernameType> {
 
 impl<S: Strategy, U: UsernameType> Backend<S, U> {
     pub fn new(pool: PgPool, table_name: &'static str, strategy: S) -> Self {
+        Self {
+            strategy,
+            pool,
+            table_name,
+            _username: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "deadpool")]
+pub struct DeadpoolBackend<S: Strategy, U: UsernameType> {
+    strategy: S,
+    pool: util::deadpool::PgPool,
+    table_name: &'static str,
+    _username: PhantomData<U>,
+}
+
+#[cfg(feature = "deadpool")]
+impl<S: Strategy, U: UsernameType> DeadpoolBackend<S, U> {
+    pub fn new(pool: util::deadpool::PgPool, table_name: &'static str, strategy: S) -> Self {
         Self {
             strategy,
             pool,
@@ -95,6 +119,59 @@ impl<S: Strategy, U: UsernameType> UserBackend<S, U> for Backend<S, U> {
 
     async fn create_user(&self, user: NewUser<U>) -> Result<User<U>, Self::Error> {
         let mut conn = self.pool.begin().await?;
+        let user = create_user(&mut conn, &self.strategy, self.table_name, user).await?;
+        conn.commit().await?;
+        Ok(user)
+    }
+
+    async fn find_user_by_id(&self, id: UserId) -> Result<User<U>, Self::Error> {
+        let mut conn = self.pool.acquire().await?;
+        Ok(database::find_user_by_id(&mut conn, id, self.table_name).await?)
+    }
+
+    async fn find_user_by_username(&self, username: &str) -> Result<User<U>, Self::Error> {
+        let mut conn = self.pool.acquire().await?;
+        Ok(
+            database::find_user_by_username(&mut conn, username.to_string(), self.table_name)
+                .await?,
+        )
+    }
+
+    fn verify_password(&self, user: &User<U>, password: &str) -> Result<(), Self::Error> {
+        match self
+            .strategy
+            .verify_password(user.password_hash.expose_secret(), password)?
+        {
+            true => Ok(()),
+            false => Err(Error::InvalidPassword),
+        }
+    }
+}
+
+#[cfg(feature = "deadpool")]
+#[async_trait]
+impl<'a, S: Strategy, U: UsernameType> UserBackendTransactional<'a, S, U>
+    for DeadpoolBackend<S, U>
+{
+    type Tx = Transaction<'a, Postgres>;
+
+    async fn create_user_transaction(
+        &'a self,
+        tx: &mut Self::Tx,
+        user: NewUser<U>,
+    ) -> Result<User<U>, Self::Error> {
+        create_user(tx, &self.strategy, self.table_name, user).await
+    }
+}
+
+#[cfg(feature = "deadpool")]
+#[async_trait]
+impl<S: Strategy, U: UsernameType> UserBackend<S, U> for DeadpoolBackend<S, U> {
+    type Error = Error;
+
+    async fn create_user(&self, user: NewUser<U>) -> Result<User<U>, Self::Error> {
+        let mut conn = self.pool.acquire().await?;
+        let mut conn = conn.begin().await?;
         let user = create_user(&mut conn, &self.strategy, self.table_name, user).await?;
         conn.commit().await?;
         Ok(user)

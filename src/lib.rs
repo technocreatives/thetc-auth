@@ -6,4 +6,4 @@ pub mod username;
 
 mod util;
 #[cfg(feature = "deadpool")]
-pub use util::deadpool::{PgPool, PgHandle};
+pub use util::deadpool::{PgHandle, PgPool};

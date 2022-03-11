@@ -4,7 +4,7 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use deadpool::managed::{Manager, PoolError, RecycleResult};
 use sqlx::postgres::PgConnectOptions;
-use sqlx::{PgConnection, Error as SqlxError, ConnectOptions, Connection};
+use sqlx::{ConnectOptions, Connection, Error as SqlxError, PgConnection};
 
 type Pool = deadpool::managed::Pool<PgHandle>;
 
@@ -12,7 +12,9 @@ type Pool = deadpool::managed::Pool<PgHandle>;
 pub struct PgPool(Pool);
 
 impl PgPool {
-    pub async fn acquire(&self) -> Result<deadpool::managed::Object<PgHandle>, PoolError<SqlxError>> {
+    pub async fn acquire(
+        &self,
+    ) -> Result<deadpool::managed::Object<PgHandle>, PoolError<SqlxError>> {
         self.0.get().await
     }
 }
@@ -52,11 +54,9 @@ impl PgPool {
 impl Manager for PgHandle {
     type Type = PgConnection;
     type Error = SqlxError;
-    
+
     async fn create(&self) -> Result<PgConnection, SqlxError> {
-        PgConnectOptions::from_str(&self.url)?
-            .connect()
-            .await
+        PgConnectOptions::from_str(&self.url)?.connect().await
     }
     async fn recycle(&self, obj: &mut PgConnection) -> RecycleResult<SqlxError> {
         Ok(obj.ping().await?)
