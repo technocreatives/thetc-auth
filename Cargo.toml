@@ -1,8 +1,10 @@
 [package]
 name = "thetc-auth"
+description = "Authenication and authorization tools"
 version = "0.1.0"
-authors = ["Brendan Molloy <brendan@bbqsrc.net>"]
+authors = ["Brendan Molloy <brendan@technocreatives.com>"]
 edition = "2018"
+license = "Apache-2.0 OR MIT"
 
 [dependencies]
 argon2 = { version = "0.3.1", features = ["std"] }

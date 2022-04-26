@@ -4,6 +4,7 @@ use redis::RedisError;
 use secrecy::ExposeSecret;
 use sqlx::PgPool;
 
+#[cfg(feature = "deadpool")]
 use crate::util;
 
 use super::{AppAuth, AppAuthId, NewAppAuth};
