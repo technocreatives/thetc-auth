@@ -77,6 +77,7 @@ pub trait UserBackend<S: Strategy, U: UsernameType> {
     async fn create_user(&self, user: NewUser<U>) -> Result<User<U>, Self::Error>;
     async fn find_user_by_id(&self, id: UserId) -> Result<User<U>, Self::Error>;
     async fn find_user_by_username(&self, name: &str) -> Result<User<U>, Self::Error>;
+    async fn list_users(&self) -> Result<Vec<User<U>>, Self::Error>;
     fn verify_password(&self, user: &User<U>, password: &str) -> Result<(), Self::Error>;
 }
 
