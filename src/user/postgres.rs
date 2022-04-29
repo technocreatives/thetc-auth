@@ -137,6 +137,11 @@ impl<S: Strategy, U: UsernameType> UserBackend<S, U> for Backend<S, U> {
         )
     }
 
+    async fn list_users(&self) -> Result<Vec<User<U>>, Self::Error> {
+        let mut conn = self.pool.acquire().await?;
+        Ok(database::list_users(&mut conn, self.table_name).await?)
+    }
+
     fn verify_password(&self, user: &User<U>, password: &str) -> Result<(), Self::Error> {
         match self
             .strategy
@@ -190,6 +195,11 @@ impl<S: Strategy, U: UsernameType> UserBackend<S, U> for DeadpoolBackend<S, U> {
         )
     }
 
+    async fn list_users(&self) -> Result<Vec<User<U>>, Self::Error> {
+        let mut conn = self.pool.acquire().await?;
+        Ok(database::list_users(&mut conn, self.table_name).await?)
+    }
+
     fn verify_password(&self, user: &User<U>, password: &str) -> Result<(), Self::Error> {
         match self
             .strategy
@@ -205,7 +215,9 @@ mod database {
     use secrecy::{ExposeSecret, Secret};
     use sqlx::{PgConnection, Row};
 
-    use crate::username::{Username, UsernameType};
+    use crate::{
+        username::{Username, UsernameType},
+    };
 
     use super::{User, UserId};
 
@@ -327,5 +339,45 @@ mod database {
             password_hash: Secret::new(r.get(2)),
             meta: r.get(3),
         })
+    }
+
+    pub async fn list_users<U: UsernameType>(
+        conn: &mut PgConnection,
+        table_name: &'static str,
+    ) -> Result<Vec<User<U>>, sqlx::Error> {
+        let rows = sqlx::query(&format!(
+            r#"
+                SELECT
+                    id as "id: UserId",
+                    username::TEXT,
+                    password_hash,
+                    meta
+                FROM {};
+            "#,
+            table_name
+        ))
+        .fetch_all(conn)
+        .await?;
+
+        let users = rows
+            .iter()
+            .map(|r| {
+                let raw_username: String = r.get(1);
+                let username: Username<U> = match raw_username.parse() {
+                    Ok(v) => v,
+                    Err(e) => return Err(sqlx::Error::Decode(Box::new(e))),
+                };
+                Ok(User {
+                    id: r.get(0),
+                    username,
+                    password_hash: Secret::new(r.get(2)),
+                    meta: r.get(3),
+                })
+            })
+            // TODO: handle errors better
+            .flat_map(|u| u.ok())
+            .collect();
+
+        Ok(users)
     }
 }
