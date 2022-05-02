@@ -16,7 +16,7 @@ pub struct NewAppAuth {
     pub expires_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AppAuth {
     pub id: AppAuthId,
     pub name: String,
