@@ -215,9 +215,7 @@ mod database {
     use secrecy::{ExposeSecret, Secret};
     use sqlx::{PgConnection, Row};
 
-    use crate::{
-        username::{Username, UsernameType},
-    };
+    use crate::username::{Username, UsernameType};
 
     use super::{User, UserId};
 

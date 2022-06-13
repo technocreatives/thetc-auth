@@ -5,7 +5,7 @@ use chrono::{DateTime, Duration, Utc};
 use deadpool_redis::{Config, Runtime};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use super::SessionId;
+use super::{PasswordResetId, SessionId};
 
 pub type SessionManager<U> = super::SessionManager<Backend<U>, Session<U>, U, Error>;
 
@@ -155,5 +155,36 @@ where
         expires_at: DateTime<Utc>,
     ) -> Result<Self::Session, Self::Error> {
         self.session(session.id, Some(expires_at)).await
+    }
+
+    async fn generate_password_reset_id(
+        &self,
+        id: Self::UserId,
+        expires_at: DateTime<Utc>,
+    ) -> Result<PasswordResetId, Self::Error> {
+        let mut conn = self.pool.get().await?;
+        let password_reset_id = PasswordResetId::new();
+
+        redis::cmd("SET")
+            .arg(format!("password-reset/{}", &*password_reset_id))
+            .arg(serde_json::to_string(&id).unwrap())
+            .arg("EXAT")
+            .arg(expires_at.timestamp())
+            .query_async(&mut conn)
+            .await?;
+
+        Ok(password_reset_id)
+    }
+
+    async fn consume_password_reset_id(
+        &self,
+        id: PasswordResetId,
+    ) -> Result<Self::UserId, Self::Error> {
+        let mut conn = self.pool.get().await?;
+        let result: String = redis::cmd("GET")
+            .arg(format!("password-reset/{}", &*id))
+            .query_async(&mut conn)
+            .await?;
+        Ok(serde_json::from_str(&result)?)
     }
 }

@@ -1,12 +1,20 @@
-use std::{convert::TryFrom, fmt::Display, ops::Deref};
+use std::{convert::TryFrom, fmt::Display};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 
 pub mod memory;
 pub mod postgres;
 pub mod redis;
+
+#[nova::newtype(sqlx, serde, copy)]
+pub type PasswordResetId = uuid::Uuid;
+
+impl PasswordResetId {
+    pub fn new() -> Self {
+        PasswordResetId(uuid::Uuid::new_v4())
+    }
+}
 
 #[async_trait]
 pub trait SessionBackend: Send + Sync {
@@ -31,6 +39,17 @@ pub trait SessionBackend: Send + Sync {
         session: Self::Session,
         expires_at: DateTime<Utc>,
     ) -> Result<Self::Session, Self::Error>;
+
+    async fn generate_password_reset_id(
+        &self,
+        id: Self::UserId,
+        expires_at: DateTime<Utc>,
+    ) -> Result<PasswordResetId, Self::Error>;
+
+    async fn consume_password_reset_id(
+        &self,
+        id: PasswordResetId,
+    ) -> Result<Self::UserId, Self::Error>;
 }
 
 #[nova::newtype(sqlx, serde, copy)]
