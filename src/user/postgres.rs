@@ -215,7 +215,7 @@ where
 
 #[cfg(feature = "deadpool")]
 #[async_trait]
-impl<'a, S: Strategy, U: UsernameType> UserBackendTransactional<'a, S, U>
+impl<'a, S: Strategy, U: UsernameType> UserBackendTransactional<'a, S, U, UserId>
     for DeadpoolBackend<S, U>
 {
     type Tx = Transaction<'a, Postgres>;
@@ -268,6 +268,19 @@ impl<S: Strategy, U: UsernameType> UserBackend<S, U> for DeadpoolBackend<S, U> {
             true => Ok(()),
             false => Err(Error::InvalidPassword),
         }
+    }
+
+    async fn change_password(&self, user: &User<U>, new_password: &str) -> Result<(), Self::Error> {
+        let mut conn = self.pool.acquire().await?;
+        let password_hash = self.strategy.generate_password_hash(new_password)?;
+        database::set_password(
+            &mut conn,
+            user.username.clone(),
+            password_hash,
+            self.table_name,
+        )
+        .await?;
+        Ok(())
     }
 }
 
