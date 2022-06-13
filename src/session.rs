@@ -3,6 +3,8 @@ use std::{convert::TryFrom, fmt::Display};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
+use crate::user::{User, UserId};
+
 pub mod memory;
 pub mod postgres;
 pub mod redis;
@@ -42,14 +44,21 @@ pub trait SessionBackend: Send + Sync {
 
     async fn generate_password_reset_id(
         &self,
-        id: Self::UserId,
+        user_id: Self::UserId,
         expires_at: DateTime<Utc>,
     ) -> Result<PasswordResetId, Self::Error>;
 
     async fn consume_password_reset_id(
         &self,
-        id: PasswordResetId,
+        password_reset_id: PasswordResetId,
     ) -> Result<Self::UserId, Self::Error>;
+
+    // async fn reset_password(
+    //     &self,
+    //     user_id: Self::UserId,
+    //     new_password: &str,
+    //     reset_password_id: PasswordResetId,
+    // ) -> Result<(), Self::Error>;
 }
 
 #[nova::newtype(sqlx, serde, copy)]
@@ -100,6 +109,7 @@ where
 
 impl<T, S, U, E> SessionManager<T, S, U, E>
 where
+    E: std::error::Error,
     T: SessionBackend<Error = E, Session = S, UserId = U>,
 {
     pub fn new(auto_refresh: bool, alive_duration: chrono::Duration, backend: T) -> Self {
@@ -140,6 +150,25 @@ where
     #[inline]
     pub async fn expire(&self, session: S) -> Result<(), E> {
         self.backend.expire(session).await
+    }
+
+    pub async fn generate_password_reset_id(
+        &self,
+        user_id: U,
+        expires_at: DateTime<Utc>,
+    ) -> Result<PasswordResetId, E> {
+        self.backend
+            .generate_password_reset_id(user_id, expires_at)
+            .await
+    }
+
+    pub async fn consume_password_reset_id(
+        &self,
+        password_reset_id: PasswordResetId,
+    ) -> Result<U, E> {
+        self.backend
+            .consume_password_reset_id(password_reset_id)
+            .await
     }
 }
 

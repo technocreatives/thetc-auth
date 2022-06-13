@@ -1,10 +1,11 @@
-mod postgres;
+pub(crate) mod postgres;
 
 use async_trait::async_trait;
 use secrecy::Secret;
 
 use crate::{
     password_strategy::Strategy,
+    session::SessionBackend,
     username::{Username, UsernameType},
 };
 
@@ -79,10 +80,13 @@ pub trait UserBackend<S: Strategy, U: UsernameType> {
     async fn find_user_by_username(&self, name: &str) -> Result<User<U>, Self::Error>;
     async fn list_users(&self) -> Result<Vec<User<U>>, Self::Error>;
     fn verify_password(&self, user: &User<U>, password: &str) -> Result<(), Self::Error>;
+    async fn change_password(&self, user: &User<U>, new_password: &str) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
-pub trait UserBackendTransactional<'a, S: Strategy, U: UsernameType>: UserBackend<S, U> {
+pub trait UserBackendTransactional<'a, S: Strategy, U: UsernameType, UT>:
+    UserBackend<S, U>
+{
     type Tx: 'a;
 
     async fn create_user_transaction(

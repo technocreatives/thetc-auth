@@ -4,9 +4,14 @@ use async_trait::async_trait;
 use secrecy::ExposeSecret;
 use sqlx::{Acquire, PgPool, Postgres, Transaction};
 
-use crate::{password_strategy::Strategy, username::UsernameType, util};
+use crate::{
+    password_strategy::Strategy,
+    session::{PasswordResetId, SessionBackend, SessionManager},
+    username::UsernameType,
+    util,
+};
 
-use super::{NewUser, User, UserBackend, UserBackendTransactional, UserId};
+use super::{NewUser, PgUsers, User, UserBackend, UserBackendTransactional, UserId};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -101,7 +106,9 @@ async fn create_user<'a, S: Strategy, U: UsernameType>(
 }
 
 #[async_trait]
-impl<'a, S: Strategy, U: UsernameType> UserBackendTransactional<'a, S, U> for Backend<S, U> {
+impl<'a, S: Strategy, U: UsernameType> UserBackendTransactional<'a, S, U, UserId>
+    for Backend<S, U>
+{
     type Tx = Transaction<'a, Postgres>;
 
     async fn create_user_transaction(
@@ -150,6 +157,59 @@ impl<S: Strategy, U: UsernameType> UserBackend<S, U> for Backend<S, U> {
             true => Ok(()),
             false => Err(Error::InvalidPassword),
         }
+    }
+
+    async fn change_password(&self, user: &User<U>, new_password: &str) -> Result<(), Self::Error> {
+        let mut conn = self.pool.acquire().await?;
+        let password_hash = self.strategy.generate_password_hash(new_password)?;
+        database::set_password(
+            &mut conn,
+            user.username.clone(),
+            password_hash,
+            self.table_name,
+        )
+        .await?;
+        Ok(())
+    }
+}
+
+pub struct PgPasswordResetBackend<T, St, Se, Ut, E>
+where
+    T: SessionBackend<Error = E, Session = Se, UserId = UserId>,
+    St: Strategy,
+    Ut: UsernameType,
+{
+    session_manager: SessionManager<T, Se, UserId, E>,
+    users: PgUsers<St, Ut>,
+}
+
+impl<T, St, Se, Ut, E> PgPasswordResetBackend<T, St, Se, Ut, E>
+where
+    E: std::error::Error + 'static,
+    T: SessionBackend<Error = E, Session = Se, UserId = UserId>,
+    St: Strategy,
+    Ut: UsernameType,
+{
+    pub fn new(session_manager: SessionManager<T, Se, UserId, E>, users: PgUsers<St, Ut>) -> Self {
+        Self {
+            session_manager,
+            users,
+        }
+    }
+
+    pub async fn reset_password(
+        &self,
+        password_reset_id: PasswordResetId,
+        new_password: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let user_id = self
+            .session_manager
+            .consume_password_reset_id(password_reset_id)
+            .await?;
+        let user = self.users.find_user_by_id(user_id).await?;
+        self.users.change_password(&user, new_password).await?;
+
+        Ok(())
     }
 }
 
@@ -265,6 +325,27 @@ mod database {
         .await?;
 
         Ok(UserId(rec.get(0)))
+    }
+
+    pub async fn set_password<U: UsernameType>(
+        conn: &mut PgConnection,
+        username: Username<U>,
+        password_hash: Secret<String>,
+        table_name: &'static str,
+    ) -> Result<(), sqlx::Error> {
+        let rec = sqlx::query(&format!(
+            r#"
+                UPDATE {} SET password_hash = $1 WHERE username = $2::text
+                RETURNING id;
+            "#,
+            table_name
+        ))
+        .bind(password_hash.expose_secret())
+        .bind(&*username)
+        .fetch_one(conn)
+        .await?;
+
+        Ok(())
     }
 
     pub async fn find_user_by_id<U: UsernameType>(

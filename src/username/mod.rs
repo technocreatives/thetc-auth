@@ -13,7 +13,7 @@ impl<T: UsernameType + Debug> Debug for Username<T> {
 }
 
 pub trait UsernameType:
-    Deref<Target = str> + FromStr<Err = Self::TryIntoError> + Sync + Send
+    Deref<Target = str> + FromStr<Err = Self::TryIntoError> + Sync + Send + Clone
 {
     type TryIntoError: std::error::Error + Send + Sync + 'static;
 
