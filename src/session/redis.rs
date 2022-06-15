@@ -181,7 +181,7 @@ where
         id: PasswordResetId,
     ) -> Result<Self::UserId, Self::Error> {
         let mut conn = self.pool.get().await?;
-        let result: String = redis::cmd("GET")
+        let result: String = redis::cmd("GETDEL")
             .arg(format!("password-reset/{}", &*id))
             .query_async(&mut conn)
             .await?;
