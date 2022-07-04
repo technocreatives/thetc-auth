@@ -1,4 +1,5 @@
 pub mod ascii;
+pub mod email;
 
 use std::{fmt::Debug, ops::Deref, str::FromStr};
 

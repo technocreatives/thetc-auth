@@ -21,6 +21,7 @@ serde_json = "1.0.66"
 sqlx = { version = "0.5.5", features = ["runtime-tokio-rustls", "postgres", "json", "chrono", "uuid", "macros"] }
 thiserror = "1.0.26"
 uuid = { version = "0.8", features = ["serde", "v4"] }
+validator = "0.15.0"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros"] }
