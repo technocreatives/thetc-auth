@@ -121,6 +121,13 @@ impl<U: Clone + Send + Sync> super::SessionBackend for Backend<U> {
         todo!()
     }
 
+    async fn verify_password_reset_id(
+        &self,
+        id: PasswordResetId,
+    ) -> Result<Self::UserId, Self::Error> {
+        todo!()
+    }
+
     async fn consume_password_reset_id(
         &self,
         id: PasswordResetId,

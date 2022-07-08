@@ -176,6 +176,18 @@ where
         Ok(password_reset_id)
     }
 
+    async fn verify_password_reset_id(
+        &self,
+        id: PasswordResetId,
+    ) -> Result<Self::UserId, Self::Error> {
+        let mut conn = self.pool.get().await?;
+        let result: String = redis::cmd("GET")
+            .arg(format!("password-reset/{}", &*id))
+            .query_async(&mut conn)
+            .await?;
+        Ok(serde_json::from_str(&result)?)
+    }
+
     async fn consume_password_reset_id(
         &self,
         id: PasswordResetId,

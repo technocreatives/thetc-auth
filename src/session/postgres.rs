@@ -60,6 +60,13 @@ impl<U: sqlx::Type<sqlx::Postgres> + Send + Sync> super::SessionBackend for Back
         todo!()
     }
 
+    async fn verify_password_reset_id(
+        &self,
+        id: PasswordResetId,
+    ) -> Result<Self::UserId, Self::Error> {
+        todo!();
+    }
+
     async fn consume_password_reset_id(
         &self,
         id: PasswordResetId,

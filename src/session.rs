@@ -53,6 +53,11 @@ pub trait SessionBackend: Send + Sync {
         password_reset_id: PasswordResetId,
     ) -> Result<Self::UserId, Self::Error>;
 
+    async fn verify_password_reset_id(
+        &self,
+        password_reset_id: PasswordResetId,
+    ) -> Result<Self::UserId, Self::Error>;
+
     // async fn reset_password(
     //     &self,
     //     user_id: Self::UserId,
