@@ -202,12 +202,13 @@ where
         password_reset_id: PasswordResetId,
         new_password: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let user_id = self
+        let user_id = self.session_manager.verify_password_reset_id(password_reset_id).await?;
+        let user = self.users.find_user_by_id(user_id).await?;
+        self.users.change_password(&user, new_password).await?;
+        self
             .session_manager
             .consume_password_reset_id(password_reset_id)
             .await?;
-        let user = self.users.find_user_by_id(user_id).await?;
-        self.users.change_password(&user, new_password).await?;
 
         Ok(())
     }
