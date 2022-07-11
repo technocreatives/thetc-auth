@@ -175,6 +175,15 @@ where
             .consume_password_reset_id(password_reset_id)
             .await
     }
+
+    pub async fn verify_password_reset_id(
+        &self,
+        password_reset_id: PasswordResetId,
+    ) -> Result<U, E> {
+        self.backend
+            .verify_password_reset_id(password_reset_id)
+            .await
+    }
 }
 
 #[cfg(test)]
