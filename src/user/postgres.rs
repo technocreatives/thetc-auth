@@ -411,12 +411,12 @@ mod database {
                     password_hash,
                     meta
                 FROM {}
-                WHERE username = $1
+                WHERE LOWER(username) = $1
                 LIMIT 1;
             "#,
             table_name
         ))
-        .bind(username)
+        .bind(username.to_lowercase())
         .fetch_one(conn)
         .await?;
 
