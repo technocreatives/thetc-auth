@@ -18,6 +18,12 @@ impl PasswordResetId {
     }
 }
 
+impl Default for PasswordResetId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 pub trait SessionBackend: Send + Sync {
     type Error: std::error::Error;
@@ -72,6 +78,12 @@ pub type SessionId = uuid::Uuid;
 impl SessionId {
     pub fn new() -> Self {
         SessionId(uuid::Uuid::new_v4())
+    }
+}
+
+impl Default for SessionId {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
